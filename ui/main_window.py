@@ -193,40 +193,31 @@ class MainWindow(QMainWindow):
                 self.focus_data = {} # Clear focus data if face is gone
         
         # 2. Determine Current Status (Priority-Based)
-        status_text = "Status: FOCUSED"
-        status_color = "#2ECC71"
-        alert_level = self.focus_data.get('alert_level', 0)
+        status_text = f"Status: {self.focus_data.get('status', 'Initializing...')}"
+        status_color = "#D6EAF8" # Default
         
-        if self.has_phone:
-            status_text = "Status: DISTRACTED (Phone)"
-            status_color = "#E74C3C"
-            self.add_alert("Distraction Confirmed: Mobile Phone detected.", debounce=5)
+        status_map = {
+            "Active Study": ("Status: ACTIVE STUDY", "#2ECC71"),
+            "Analog Study": ("Status: ANALOG STUDY (Deep Work)", "#2ECC71"),
+            "Cognitive Pause": ("Status: COGNITIVE PAUSE", "#3498DB"),
+            "Passive Drift": ("Status: PASSIVE DRIFT", "#F39C12"),
+            "Daydreaming": ("Status: DAYDREAMING", "#F39C12"),
+            "Mobile Usage": ("Status: MOBILE DISTRACTION!", "#E74C3C"),
+            "Session Paused": ("Status: SESSION PAUSED", "#95A5A6")
+        }
+        
+        if self.focus_data.get('status') in status_map:
+            status_text, status_color = status_map[self.focus_data['status']]
+            
+        # Alarm Logic for high priority
+        if self.focus_data.get('status') == "Mobile Usage":
+            self.add_alert("Mobile Distraction Detected!", debounce=5)
             self.play_alarm(frequency=1200, duration=600)
             self.distraction_active = True
-        elif alert_level == 3:
-            status_text = "Status: PERSISTENT DISTRACTION"
-            status_color = "#E74C3C"
-            self.add_alert(self.focus_data.get('alert_msg', ""), debounce=5)
-            self.play_alarm(frequency=1000, duration=500)
+        elif self.focus_data.get('alert_level', 0) >= 1:
             self.distraction_active = True
-        elif alert_level == 2:
-            status_text = "Status: LOOKING DOWN (Nudge)"
-            status_color = "#F39C12"
-            self.add_alert(self.focus_data.get('alert_msg', ""), debounce=10)
-            self.play_alarm(frequency=800, duration=200)
-            self.distraction_active = True
-        elif alert_level == 1:
-            status_text = "Status: LOOKING DOWN"
-            status_color = "#F39C12"
-            self.distraction_active = True
-        elif not self.face_present:
-            status_text = "Status: FACE MISSING"
-            status_color = "#95A5A6"
-            self.distraction_active = False
-        elif self.focus_data.get('focus_score', 100) < 60:
-            status_text = "Status: LOOKING AWAY"
-            status_color = "#F39C12"
-            self.distraction_active = False
+            if self.focus_data.get('status') == "Passive Drift":
+                self.add_alert("Passive Drift detected. Focus back on task?", debounce=30)
         else:
             self.distraction_active = False
 

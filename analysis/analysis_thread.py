@@ -52,8 +52,8 @@ class AnalysisThread(QThread):
         self.running = True
         
         # Apply Personalized Learnings
-        thresholds = self.learning_engine.get_thresholds()
-        self.focus_anal.reconfigure(thresholds)
+        # thresholds = self.learning_engine.get_thresholds()
+        # self.focus_anal.reconfigure(thresholds)
         
         while self.running:
             if self.current_frame is None:
@@ -64,20 +64,38 @@ class AnalysisThread(QThread):
             results = {}
             frame_to_process = self.current_frame
             
-            # 1. Face & Pose (20 Hz)
+            # 1. Objects (YOLO) - Move up so focus can use it
+            is_looking_down = results.get('focus', {}).get('status') == "Passive Drift" # Approximate for interval
+            current_phone_interval = YOLO_SUSPICIOUS_INTERVAL if is_looking_down else PHONE_DETECTION_INTERVAL
+            
+            detections = []
+            if current_time - self.last_phone_time >= current_phone_interval:
+                detections = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
+                results['phone_detections'] = detections
+                self.last_phone_time = current_time
+
+            # 2. Face & Pose (20 Hz)
             if current_time - self.last_face_time >= FACE_POSE_INTERVAL:
                 face_data = self.face_proc.process(frame_to_process)
                 pose_data = self.pose_proc.process(frame_to_process)
                 
                 if face_data:
-                    results['face_data'] = face_data # Full data for AR overlay
+                    results['face_data'] = face_data
                     pose_metrics = pose_data['metrics'] if pose_data else None
-                    results['fatigue'] = self.fatigue_anal.analyze(face_data['fatigue_metrics'], pose_metrics)
-                    results['focus'] = self.focus_anal.analyze(face_data['head_pose'])
+                    fatigue_results = self.fatigue_anal.analyze(face_data['fatigue_metrics'], pose_metrics)
+                    results['fatigue'] = fatigue_results
+                    
+                    # New Inferential Focus Analysis
+                    results['focus'] = self.focus_anal.analyze(
+                        face_data, 
+                        pose_data, 
+                        results.get('phone_detections', []), 
+                        fatigue_results.get('score', 0)
+                    )
                     results['face_present'] = True
                 else:
                     results['face_present'] = False
-                    results['focus'] = {'alert_needed': True, 'alert_msg': "Face not detected!"}
+                    results['focus'] = self.focus_anal.analyze(None, None, [], 0)
                 
                 # Scientific Coaching (Every 5 seconds)
                 if current_time - self.last_coach_time >= 5.0:

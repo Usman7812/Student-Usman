@@ -22,13 +22,31 @@ EAR_CONSEC_FRAMES = 15 # frames at 24fps ~ 0.6s
 MAR_THRESHOLD = 0.5
 YAWN_CONSEC_FRAMES = 20
 
-# --- Focus Detection ---
+# --- Focus & Distraction Logic (Research-Backed) ---
 YAW_THRESHOLD = 30    # degrees
 PITCH_THRESHOLD = 20  # degrees
-LOOKING_DOWN_THRESHOLD = 40 # degrees (pitch down - more responsive default)
-LOOKING_DOWN_GRACE_PERIOD = 15 # seconds (allow deep reading)
-LOOK_UP_RESET_THRESHOLD = 3.0 # seconds (must look up for 3s to reset deep distraction)
-FOCUS_SCORE_WINDOW = 120 # seconds (2 minutes)
+LOOKING_DOWN_THRESHOLD = 40 # degrees (pitch down)
+LOOK_UP_RESET_THRESHOLD = 3.0 # seconds
+
+# Sample Windows (Seconds)
+WINDOW_DIGITAL_FOCUS = 1.0
+WINDOW_ANALOG_STUDY = 8.0
+WINDOW_COGNITIVE_PAUSE = 15.0
+WINDOW_PASSIVE_DRIFT = 30.0
+WINDOW_MOBILE_USAGE = 2.0
+WINDOW_DAYDREAMING = 30.0
+WINDOW_FATIGUE_AVG = 60.0
+
+# Behavioral Signatures
+SACCADE_RATIO_THRESHOLD = 0.7  # Ratio of horizontal vs vertical eye movement
+EXPRESSION_SPIKE_WINDOW = 5.0   # Window to detect rapid micro-expressions
+MOBILE_ALARM_DELAY = 1.0        # Persistence before alarm
+FATIGUE_BREAK_THRESHOLD = 75.0  # Fatigue score to suggest break
+
+# Distraction Thresholds
+GAZE_THRESHOLD = 0.35  # Relative eye movement
+EYE_GRACE_PERIOD = 2.0 # Seconds before alert
+MORNING_BOOST = 1.1    # Focus threshold multiplier for morning
 FOCUS_ALERT_THRESHOLD = 60 # focus % below which alert is triggered
 
 # --- Feedback Settings ---

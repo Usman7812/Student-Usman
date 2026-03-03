@@ -1,105 +1,123 @@
 import time
+import numpy as np
 from config import (
-    YAW_THRESHOLD, 
-    PITCH_THRESHOLD, 
-    LOOKING_DOWN_THRESHOLD, 
-    LOOKING_DOWN_GRACE_PERIOD, 
-    LOOK_UP_RESET_THRESHOLD,
-    FOCUS_SCORE_WINDOW, 
-    FOCUS_ALERT_THRESHOLD
+    YAW_THRESHOLD, PITCH_THRESHOLD, LOOKING_DOWN_THRESHOLD,
+    WINDOW_DIGITAL_FOCUS, WINDOW_ANALOG_STUDY, WINDOW_COGNITIVE_PAUSE,
+    WINDOW_PASSIVE_DRIFT, WINDOW_MOBILE_USAGE, WINDOW_DAYDREAMING,
+    SACCADE_RATIO_THRESHOLD, PHONE_CLASS_ID
 )
 
 class FocusAnalyzer:
     def __init__(self):
-        self.focus_history = [] # List of (timestamp, is_focused)
-        self.last_alert_time = 0
-        self.look_down_start_time = None
-        self.last_look_up_time = None
-        self.looking_down_threshold = LOOKING_DOWN_THRESHOLD
+        self.state = "Active Study"
+        self.state_start_time = time.time()
+        self.last_known_status = "Active Study"
+        
+        # Persistence counters for flickering prevention
+        self.phone_persistence = 0
+        self.face_missing_start = None
 
     def reconfigure(self, thresholds):
-        self.looking_down_threshold = thresholds.get('LOOKING_DOWN_THRESHOLD', LOOKING_DOWN_THRESHOLD)
+        # This method is no longer directly used in the new logic, but kept for compatibility if needed
+        pass
 
-    def analyze(self, head_pose):
-        current_time = time.time()
+    def analyze(self, face_data, pose_data, detections, fatigue_score):
+        """
+        Research-Backed Inferential Analysis.
+        Combines Pose, Behavioral Signatures, and Material Context.
+        """
+        now = time.time()
         
-        is_looking_down = False
-        if head_pose is None:
-            # If face is lost, check if we were looking down
-            if self.look_down_start_time is not None:
-                if self.last_look_up_time is None:
-                    self.last_look_up_time = current_time
-                
-                # If face is gone for > 5s while looking down, assume they left or reset
-                if current_time - self.last_look_up_time > 5.0:
-                    self.look_down_start_time = None
-                    self.last_look_up_time = None
-                    is_looking_down = False
-                else:
-                    is_looking_down = True
-            else:
-                is_looking_down = False
-            self.focus_history.append((current_time, False))
+        if not face_data:
+            return self._handle_face_missing(now)
+            
+        pose = face_data.get('head_pose', {})
+        signatures = face_data.get('signatures', {})
+        yaw = abs(pose.get('yaw', 0))
+        pitch = pose.get('pitch', 0)
+        
+        saccade_ratio = signatures.get('saccade_ratio', 0)
+        expression_spike = signatures.get('expression_spike', False)
+        
+        # Material Context
+        has_phone = any(d['class'] == PHONE_CLASS_ID for d in detections)
+        has_book = any(d['class'] == 73 for d in detections)
+        
+        # 1. IMMEDIATE ALARM: Mobile Usage (Direct or Inferred)
+        if has_phone or (pitch > 30 and expression_spike):
+            self.phone_persistence += 1
+            if self.phone_persistence > 2: # ~0.5s at 4fps yolo
+                return self._update_state("Mobile Usage", now)
         else:
-            yaw = abs(head_pose['yaw'])
-            pitch = head_pose['pitch']
-            
-            # Normal focus check
-            is_focused = yaw < YAW_THRESHOLD and abs(pitch) < PITCH_THRESHOLD
-            
-            # 1. Look-Down Persistence Logic
-            if pitch > self.looking_down_threshold:
-                is_looking_down = True
-                is_focused = False
-                self.last_look_up_time = None # Reset look-up buffer
-                if self.look_down_start_time is None:
-                    self.look_down_start_time = current_time
+            self.phone_persistence = 0
+
+        # 2. ANALOG STUDY (Confirmed or Inferred)
+        if pitch > LOOKING_DOWN_THRESHOLD:
+            # If we see a book OR systematic saccades, it's study
+            if has_book or saccade_ratio > SACCADE_RATIO_THRESHOLD:
+                return self._update_state("Analog Study", now)
             else:
-                # User looked up. Check if we should reset the timer or keep buffering
-                if self.look_down_start_time is not None:
-                    if self.last_look_up_time is None:
-                        self.last_look_up_time = current_time
-                    
-                    # SOFT RESET: Only clear look_down if they look up for > LOOK_UP_RESET_THRESHOLD
-                    if current_time - self.last_look_up_time > LOOK_UP_RESET_THRESHOLD:
-                        self.look_down_start_time = None
-                        self.last_look_up_time = None
-                    else:
-                        is_looking_down = True # Keep the "Distracted" state active during brief glaces up
-                
-            self.focus_history.append((current_time, is_focused))
+                # Looking down without book or reading pattern = Drift
+                return self._update_state("Passive Drift", now)
+
+        # 3. YAW-BASED: Cognitive Pause vs Daydreaming
+        if yaw > YAW_THRESHOLD:
+            elapsed = now - self.state_start_time
+            if elapsed < WINDOW_COGNITIVE_PAUSE:
+                return self._update_state("Cognitive Pause", now)
+            else:
+                return self._update_state("Daydreaming", now)
+
+        # 4. DEFAULT: Digital Focus
+        return self._update_state("Active Study", now)
+
+    def _update_state(self, new_state, now):
+        if new_state != self.state:
+            # Only switch if the required window has passed or if it's high priority
+            elapsed = now - self.state_start_time
             
-        # Clean history
-        self.focus_history = [f for f in self.focus_history if current_time - f[0] < FOCUS_SCORE_WINDOW]
-        
-        focused_count = sum([1 for f in self.focus_history if f[1]])
-        focus_score = (focused_count / len(self.focus_history)) * 100 if self.focus_history else 100
-        
-        alert_needed = False
-        alert_level = 0 # 0: None, 1: Visual, 2: Nudge, 3: Alarm
-        alert_msg = ""
-        
-        # 2. 3-Stage Distraction Analysis
-        if is_looking_down and self.look_down_start_time:
-            elapsed = current_time - self.look_down_start_time
-            if elapsed > LOOKING_DOWN_GRACE_PERIOD:
-                alert_needed = True
-                if elapsed > 25:
-                    alert_level = 3 # Alarm
-                    alert_msg = f"CRITICAL: Persistent distraction ({int(elapsed)}s)!"
-                elif elapsed > 20:
-                    alert_level = 2 # Nudge sound
-                    alert_msg = f"Nudge: You've been looking down for {int(elapsed)}s."
-                else:
-                    alert_level = 1 # Visual only
-                    alert_msg = "Looking down? Focus back when ready."
-        
+            # High Priority overrides (Mobile)
+            if new_state == "Mobile Usage":
+                self.state = new_state
+                self.state_start_time = now
+            
+            # Standard transition logic based on Sample Windows
+            windows = {
+                "Analog Study": WINDOW_ANALOG_STUDY,
+                "Passive Drift": 5.0, # Faster transition to drift to catch it early
+                "Daydreaming": WINDOW_DAYDREAMING,
+                "Active Study": WINDOW_DIGITAL_FOCUS
+            }
+            
+            required_window = windows.get(new_state, 2.0)
+            if elapsed >= required_window:
+                self.state = new_state
+                self.state_start_time = now
+                
         return {
-            'focus_score': focus_score,
-            'alert_needed': alert_needed,
-            'alert_level': alert_level,
-            'alert_msg': alert_msg,
-            'is_looking_down': is_looking_down,
-            'pitch': pitch if head_pose else 0,
-            'look_down_duration': current_time - self.look_down_start_time if self.look_down_start_time else 0
+            'status': self.state,
+            'is_focused': self.state in ["Active Study", "Analog Study", "Cognitive Pause"],
+            'alert_level': self._get_alert_level(),
+            'focus_score': 100 if self.state in ["Active Study", "Analog Study"] else 50
+        }
+
+    def _get_alert_level(self):
+        levels = {
+            "Active Study": 0,
+            "Analog Study": 0,
+            "Cognitive Pause": 0,
+            "Passive Drift": 1,
+            "Daydreaming": 1,
+            "Mobile Usage": 2,
+            "Session Paused": 0
+        }
+        return levels.get(self.state, 0)
+
+    def _handle_face_missing(self, now):
+        self.state = "Session Paused"
+        return {
+            'status': "Session Paused",
+            'is_focused': False,
+            'alert_level': 0,
+            'focus_score': 0
         }

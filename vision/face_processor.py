@@ -40,6 +40,11 @@ class FaceProcessor:
         self.MOUTH_BOTTOM = 14
         self.MOUTH_LEFT = 78
         self.MOUTH_RIGHT = 308
+        
+        # History for Inferential Signatures
+        self.eye_history = [] # List of (lx, ly, rx, ry)
+        self.blendshape_history = [] # List of blendshape_dict
+        self.history_limit = 30 # ~1-2 seconds at 15-20fps
 
     def process(self, frame):
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -52,7 +57,7 @@ class FaceProcessor:
             return None
         
         landmarks = result.face_landmarks[0]
-        blendshapes = result.face_blendshapes[0] if result.face_blendshapes else []
+        blendshapes = [b for b in result.face_blendshapes[0]] if result.face_blendshapes else []
         
         h, w, _ = frame.shape
         points = np.array([[l.x * w, l.y * h] for l in landmarks])
@@ -60,11 +65,58 @@ class FaceProcessor:
         # Convert blendshapes to dictionary
         blendshape_dict = {b.category_name: b.score for b in blendshapes}
         
+        # Update history
+        left_eye_center = np.mean(points[self.LEFT_EYE], axis=0)
+        right_eye_center = np.mean(points[self.RIGHT_EYE], axis=0)
+        self.eye_history.append((*left_eye_center, *right_eye_center))
+        self.blendshape_history.append(blendshape_dict)
+        
+        if len(self.eye_history) > self.history_limit:
+            self.eye_history.pop(0)
+            self.blendshape_history.pop(0)
+        
         return {
             'landmarks': points,
             'blendshapes': blendshape_dict,
             'fatigue_metrics': self.calculate_fatigue(points),
-            'head_pose': self.estimate_head_pose(points, h, w)
+            'head_pose': self.estimate_head_pose(points, h, w),
+            'signatures': self.calculate_signatures()
+        }
+
+    def calculate_signatures(self):
+        if len(self.eye_history) < 10:
+            return {'saccade_ratio': 0, 'expression_spike': False}
+
+        # 1. Saccade Analysis (L-R vs Chaotic)
+        # Convert to numpy for vector math
+        eyes = np.array(self.eye_history)
+        # Calculate horizontal (dx) and vertical (dy) movement of both eyes
+        dx = np.abs(np.diff(eyes[:, [0, 2]], axis=0))
+        dy = np.abs(np.diff(eyes[:, [1, 3]], axis=0))
+        
+        total_dx = np.mean(dx)
+        total_dy = np.mean(dy)
+        
+        # Saccade ratio: High if mostly horizontal (reading)
+        saccade_ratio = total_dx / (total_dy + 1e-6)
+        
+        # 2. Expression Spikes (Micro-smirks, brow raises)
+        # Check for rapid changes in key blendshapes associated with micro-interactions
+        spike = False
+        if len(self.blendshape_history) > 5:
+            curr = self.blendshape_history[-1]
+            prev = self.blendshape_history[-5]
+            
+            # Key triggers: mouthSmile, browRaise, mouthPucker
+            triggers = ['mouthSmileLeft', 'mouthSmileRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight']
+            for t in triggers:
+                if curr.get(t, 0) - prev.get(t, 0) > 0.2: # Significant jump in score
+                    spike = True
+                    break
+        
+        return {
+            'saccade_ratio': float(saccade_ratio),
+            'expression_spike': spike
         }
 
     def calculate_fatigue(self, points):
