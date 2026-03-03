@@ -5,8 +5,10 @@ from vision.face_processor import FaceProcessor
 from vision.pose_processor import PoseProcessor
 from vision.yolo_detector import YOLODetector
 from analysis.fatigue_analyzer import FatigueAnalyzer
-from analysis.emotion_analyzer import EmotionAnalyzer
+from analysis.vector_emotion_matcher import VectorEmotionMatcher
 from analysis.focus_analyzer import FocusAnalyzer
+from analysis.scientific_coach import ScientificCoach
+import os
 from config import (
     FACE_POSE_INTERVAL, 
     PHONE_DETECTION_INTERVAL, 
@@ -14,12 +16,15 @@ from config import (
     PHONE_CONF_THRESHOLD,
     YOLO_SUSPICIOUS_INTERVAL
 )
+from analysis.learning_engine import LearningEngine
 
 class AnalysisThread(QThread):
     results_ready = pyqtSignal(dict)
 
-    def __init__(self):
+    def __init__(self, db_manager):
         super().__init__()
+        self.db = db_manager
+        self.learning_engine = LearningEngine(self.db)
         self.running = False
         self.current_frame = None
         
@@ -30,19 +35,26 @@ class AnalysisThread(QThread):
         
         # Analyzers
         self.fatigue_anal = FatigueAnalyzer()
-        self.emotion_anal = EmotionAnalyzer()
+        self.emotion_anal = VectorEmotionMatcher(os.path.join('assets', 'emotion_vectors.json'))
         self.focus_anal = FocusAnalyzer()
+        self.coach = ScientificCoach()
         
         # Timers
         self.last_face_time = 0
         self.last_phone_time = 0
         self.last_emotion_time = 0
+        self.last_coach_time = 0
 
     def update_frame(self, frame):
         self.current_frame = frame.copy()
 
     def run(self):
         self.running = True
+        
+        # Apply Personalized Learnings
+        thresholds = self.learning_engine.get_thresholds()
+        self.focus_anal.reconfigure(thresholds)
+        
         while self.running:
             if self.current_frame is None:
                 time.sleep(0.01)
@@ -58,12 +70,19 @@ class AnalysisThread(QThread):
                 pose_data = self.pose_proc.process(frame_to_process)
                 
                 if face_data:
-                    results['fatigue'] = self.fatigue_anal.analyze(face_data['fatigue_metrics'])
+                    results['face_data'] = face_data # Full data for AR overlay
+                    pose_metrics = pose_data['metrics'] if pose_data else None
+                    results['fatigue'] = self.fatigue_anal.analyze(face_data['fatigue_metrics'], pose_metrics)
                     results['focus'] = self.focus_anal.analyze(face_data['head_pose'])
                     results['face_present'] = True
                 else:
                     results['face_present'] = False
                     results['focus'] = {'alert_needed': True, 'alert_msg': "Face not detected!"}
+                
+                # Scientific Coaching (Every 5 seconds)
+                if current_time - self.last_coach_time >= 5.0:
+                    results['coach'] = self.coach.analyze(results)
+                    self.last_coach_time = current_time
                 
                 if pose_data:
                     results['pose_data'] = pose_data
@@ -80,9 +99,11 @@ class AnalysisThread(QThread):
                 results['phone_detections'] = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
                 self.last_phone_time = current_time
 
-            # 3. Emotion Detection (DeepFace)
+            # 3. Emotion Detection (Neural Vector Matching)
             if current_time - self.last_emotion_time >= EMOTION_SAMPLE_INTERVAL:
-                results['emotion'] = self.emotion_anal.analyze(frame_to_process)
+                # Use high-fidelity blendshapes from face_data if available
+                if 'face_data' in results and 'blendshapes' in results['face_data']:
+                    results['emotion'] = self.emotion_anal.match(results['face_data']['blendshapes'])
                 self.last_emotion_time = current_time
 
             if results:

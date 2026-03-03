@@ -52,11 +52,17 @@ class FaceProcessor:
             return None
         
         landmarks = result.face_landmarks[0]
+        blendshapes = result.face_blendshapes[0] if result.face_blendshapes else []
+        
         h, w, _ = frame.shape
         points = np.array([[l.x * w, l.y * h] for l in landmarks])
         
+        # Convert blendshapes to dictionary
+        blendshape_dict = {b.category_name: b.score for b in blendshapes}
+        
         return {
             'landmarks': points,
+            'blendshapes': blendshape_dict,
             'fatigue_metrics': self.calculate_fatigue(points),
             'head_pose': self.estimate_head_pose(points, h, w)
         }
@@ -89,4 +95,23 @@ class FaceProcessor:
         eye_center_y = (left_eye[1] + right_eye[1]) / 2
         pitch = (nose[1] - eye_center_y) / (right_eye[1] - left_eye[1]) * 90
         
-        return {'yaw': yaw, 'pitch': pitch}
+        # AR Projection Points (3D Axes)
+        # We project lines from the nose based on pitch/yaw
+        scale = 50
+        nose_p = (int(nose[0]), int(nose[1]))
+        
+        # Simple orthographic-like projection for visualization
+        x_axis = (int(nose[0] + scale * np.cos(np.radians(yaw))), int(nose[1]))
+        y_axis = (int(nose[0]), int(nose[1] + scale * np.sin(np.radians(pitch))))
+        z_axis = (int(nose[0] + scale * np.sin(np.radians(yaw))), int(nose[1] - scale * np.cos(np.radians(pitch))))
+        
+        return {
+            'yaw': yaw, 
+            'pitch': pitch,
+            'projection_points': {
+                'nose': nose_p,
+                'x': x_axis,
+                'y': y_axis,
+                'z': z_axis
+            }
+        }

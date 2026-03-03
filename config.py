@@ -25,7 +25,7 @@ YAWN_CONSEC_FRAMES = 20
 # --- Focus Detection ---
 YAW_THRESHOLD = 30    # degrees
 PITCH_THRESHOLD = 20  # degrees
-LOOKING_DOWN_THRESHOLD = 50 # degrees (pitch down - more distinct)
+LOOKING_DOWN_THRESHOLD = 40 # degrees (pitch down - more responsive default)
 LOOKING_DOWN_GRACE_PERIOD = 15 # seconds (allow deep reading)
 LOOK_UP_RESET_THRESHOLD = 3.0 # seconds (must look up for 3s to reset deep distraction)
 FOCUS_SCORE_WINDOW = 120 # seconds (2 minutes)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base, Session, Event, EmotionLog, PostureLog, DistractionLog
+from database.models import Base, Session, Event, EmotionLog, PostureLog, DistractionLog, UserFeedback
 from config import DB_PATH
 
 class DatabaseManager:
@@ -55,4 +55,16 @@ class DatabaseManager:
         with self.Session() as db_session:
             log = DistractionLog(session_id=self.current_session_id, source=source)
             db_session.add(log)
+            db_session.commit()
+
+    def log_feedback(self, event_type, is_false_positive, correction_detail=None, pitch=None, emotions_json=None):
+        with self.Session() as db_session:
+            feedback = UserFeedback(
+                event_type=event_type,
+                is_false_positive=int(is_false_positive),
+                correction_detail=correction_detail,
+                pitch_at_event=pitch,
+                raw_emotions_json=emotions_json
+            )
+            db_session.add(feedback)
             db_session.commit()

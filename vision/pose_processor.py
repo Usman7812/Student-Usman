@@ -66,4 +66,8 @@ class PoseProcessor:
         shoulder_midpoint_y = (left_shoulder[1] + right_shoulder[1]) / 2
         lean = shoulder_midpoint_y - nose[1]
         
-        return {'tilt_angle': tilt_angle, 'lean': lean}
+        return {
+            'tilt_angle': tilt_angle, 
+            'lean': lean,
+            'shoulder_height': shoulder_midpoint_y
+        }

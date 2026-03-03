@@ -64,6 +64,16 @@ class UserStats(Base):
     last_study_date = Column(DateTime)
     burnout_risk_score = Column(Float, default=0.0) # 0 to 100
 
+class UserFeedback(Base):
+    __tablename__ = 'user_feedback'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    event_type = Column(String(50)) # 'distraction', 'emotion', 'fatigue'
+    is_false_positive = Column(Integer, default=1) # 1 if user says "AI was wrong"
+    correction_detail = Column(String(255), nullable=True)
+    pitch_at_event = Column(Float, nullable=True) # Captured pitch for threshold learning
+    raw_emotions_json = Column(String(1000), nullable=True) # Captured emotion probs for bias learning
+
 class DailyTarget(Base):
     __tablename__ = 'daily_targets'
     id = Column(Integer, primary_key=True)

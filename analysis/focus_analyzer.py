@@ -15,15 +15,30 @@ class FocusAnalyzer:
         self.last_alert_time = 0
         self.look_down_start_time = None
         self.last_look_up_time = None
+        self.looking_down_threshold = LOOKING_DOWN_THRESHOLD
+
+    def reconfigure(self, thresholds):
+        self.looking_down_threshold = thresholds.get('LOOKING_DOWN_THRESHOLD', LOOKING_DOWN_THRESHOLD)
 
     def analyze(self, head_pose):
         current_time = time.time()
         
         is_looking_down = False
         if head_pose is None:
-            # If face is lost, we don't reset the look-down timer immediately
-            # This handles cases where the head tilts so far down the camera loses it
-            is_looking_down = (self.look_down_start_time is not None)
+            # If face is lost, check if we were looking down
+            if self.look_down_start_time is not None:
+                if self.last_look_up_time is None:
+                    self.last_look_up_time = current_time
+                
+                # If face is gone for > 5s while looking down, assume they left or reset
+                if current_time - self.last_look_up_time > 5.0:
+                    self.look_down_start_time = None
+                    self.last_look_up_time = None
+                    is_looking_down = False
+                else:
+                    is_looking_down = True
+            else:
+                is_looking_down = False
             self.focus_history.append((current_time, False))
         else:
             yaw = abs(head_pose['yaw'])
@@ -33,7 +48,7 @@ class FocusAnalyzer:
             is_focused = yaw < YAW_THRESHOLD and abs(pitch) < PITCH_THRESHOLD
             
             # 1. Look-Down Persistence Logic
-            if pitch > LOOKING_DOWN_THRESHOLD:
+            if pitch > self.looking_down_threshold:
                 is_looking_down = True
                 is_focused = False
                 self.last_look_up_time = None # Reset look-up buffer
@@ -85,5 +100,6 @@ class FocusAnalyzer:
             'alert_level': alert_level,
             'alert_msg': alert_msg,
             'is_looking_down': is_looking_down,
+            'pitch': pitch if head_pose else 0,
             'look_down_duration': current_time - self.look_down_start_time if self.look_down_start_time else 0
         }

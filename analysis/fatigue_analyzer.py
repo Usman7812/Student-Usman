@@ -6,14 +6,33 @@ class FatigueAnalyzer:
         self.ear_consec_frames = 0
         self.mar_consec_frames = 0
         self.fatigue_score = 0 # 0-100
+        self.baseline_shoulder_height = None
+        self.slump_frames = 0
 
-    def analyze(self, fatigue_metrics):
+    def analyze(self, fatigue_metrics, pose_metrics=None):
         if fatigue_metrics is None:
             return None
         
         ear = fatigue_metrics['ear']
         mar = fatigue_metrics['mar']
         
+        is_slumped = False
+        if pose_metrics and 'shoulder_height' in pose_metrics:
+            curr_h = pose_metrics['shoulder_height']
+            if self.baseline_shoulder_height is None:
+                self.baseline_shoulder_height = curr_h
+            
+            # If shoulders drop (Y increases in CV2) by 15% from baseline
+            if curr_h > self.baseline_shoulder_height * 1.15:
+                self.slump_frames += 1
+            else:
+                self.slump_frames = 0
+                # Slowly adapt baseline to account for natural movement
+                self.baseline_shoulder_height = self.baseline_shoulder_height * 0.99 + curr_h * 0.01
+
+            if self.slump_frames > 30: # ~2 seconds of slumping
+                is_slumped = True
+
         # Check for drowsiness (eyes closed)
         if ear < EAR_THRESHOLD:
             self.ear_consec_frames += 1
@@ -46,5 +65,6 @@ class FatigueAnalyzer:
         return {
             'fatigue_score': self.fatigue_score,
             'alert_needed': alert_needed,
-            'alert_msg': alert_msg
+            'alert_msg': alert_msg,
+            'is_slumped': is_slumped
         }

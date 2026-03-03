@@ -2,20 +2,9 @@ import os
 import sys
 import logging
 
-# Suppress TensorFlow, Keras, and MediaPipe warnings/logs
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0: all, 1: no INFO, 2: no INFO/WARN, 3: no INFO/WARN/ERROR
+# Suppress MediaPipe and general logging
 os.environ['GLOG_minloglevel'] = '2'      # 0: INFO, 1: WARNING, 2: ERROR, 3: FATAL
 os.environ['ABSL_LOGGING_LEVEL'] = 'none' # Disable Abseil logging
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
-
-# Import AI libraries BEFORE PyQt6 to prevent DLL conflicts
-try:
-    import tensorflow as tf
-    tf.get_logger().setLevel('ERROR')
-    import deepface
-except ImportError:
-    pass
 
 from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow

@@ -1,7 +1,6 @@
 opencv-python==4.9.0.80
 mediapipe==0.10.9
 ultralytics==8.1.0
-deepface==0.0.89
 anthropic==0.25.0
 sqlalchemy==2.0.28
 numpy==1.26.4
