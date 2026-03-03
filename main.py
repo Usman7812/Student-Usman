@@ -2,6 +2,18 @@ import os
 import sys
 import logging
 
+# --- FIX: OpenMP/DLL Initialization for PyTorch + PyQt6 Conflict ---
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+try:
+    import torch
+    # Force DLL loading early
+    if hasattr(torch, '_load_dll_libraries'):
+        torch._load_dll_libraries()
+    print(f"[SYSTEM] PyTorch initialized successfully (Version: {torch.__version__})")
+except Exception as e:
+    print(f"[SYSTEM] Early PyTorch initialization failed: {e}")
+# -----------------------------------------------------------------
+
 # Suppress MediaPipe and general logging
 os.environ['GLOG_minloglevel'] = '2'      # 0: INFO, 1: WARNING, 2: ERROR, 3: FATAL
 os.environ['ABSL_LOGGING_LEVEL'] = 'none' # Disable Abseil logging

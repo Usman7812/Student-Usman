@@ -1,12 +1,18 @@
+import os
 import cv2
 from config import PHONE_CLASS_ID
+
+# --- FIX: OpenMP/DLL Initialization for PyTorch ---
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+# -------------------------------------------------
 
 try:
     from ultralytics import YOLO
     HAS_YOLO = True
-except (ImportError, OSError):
+except (ImportError, OSError) as e:
     HAS_YOLO = False
-    print("[SYSTEM] PyTorch DLLs failed to load. YOLO Distraction Detection disabled.")
+    # Only print if we are sure it's a DLL issue
+    print(f"[SYSTEM] YOLO Distraction Detection disabled (Reason: {e})")
 
 class YOLODetector:
     def __init__(self, model_name='yolov8n.pt'):
