@@ -47,9 +47,13 @@ class FocusAnalyzer:
         self.last_detections = detections # Store for reporting
         
         # 1. IMMEDIATE ALARM: Mobile Usage (Direct or Inferred)
+        high_conf_distraction = any(d['class'] in DISTRACTIONS and d['conf'] > 0.7 for d in detections)
+        high_conf_tool = any(d['class'] in STUDY_TOOLS and d['conf'] > 0.7 for d in detections)
+        
         if has_phone or (pitch > 30 and expression_spike):
             self.phone_persistence += 1
-            if self.phone_persistence > 2: # ~0.5s at 4fps yolo
+            # Fast-track high confidence or reduce persistence (threshold 1 means 2 detections)
+            if self.phone_persistence > 1 or high_conf_distraction: 
                 return self._update_state("Mobile Usage", now)
         else:
             self.phone_persistence = 0
@@ -57,7 +61,7 @@ class FocusAnalyzer:
         # 2. ANALOG STUDY (Confirmed or Inferred)
         if pitch > LOOKING_DOWN_THRESHOLD:
             # If we see a book OR systematic saccades, it's study
-            if has_book or saccade_ratio > SACCADE_RATIO_THRESHOLD:
+            if has_book or saccade_ratio > SACCADE_RATIO_THRESHOLD or high_conf_tool:
                 return self._update_state("Analog Study", now)
             else:
                 # Looking down without book or reading pattern = Drift

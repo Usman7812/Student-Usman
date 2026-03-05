@@ -43,7 +43,12 @@ class AnalysisThread(QThread):
         self.last_face_time = 0
         self.last_phone_time = 0
         self.last_emotion_time = 0
+        self.last_face_time = 0
+        self.last_phone_time = 0
+        self.last_emotion_time = 0
         self.last_coach_time = 0
+        self.is_looking_down = False
+        self.last_yolo_detections = []
 
     def update_frame(self, frame):
         self.current_frame = frame.copy()
@@ -66,11 +71,11 @@ class AnalysisThread(QThread):
             
             # 1. Objects (YOLO) - Variable Interval Detection
             # Determine interval: If looking down, scan MUCH faster to confirm distraction
-            is_looking_down = results.get('focus', {}).get('is_looking_down', False)
-            current_phone_interval = YOLO_SUSPICIOUS_INTERVAL if is_looking_down else PHONE_DETECTION_INTERVAL
+            current_phone_interval = YOLO_SUSPICIOUS_INTERVAL if self.is_looking_down else PHONE_DETECTION_INTERVAL
             
             if current_time - self.last_phone_time >= current_phone_interval:
-                results['phone_detections'] = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
+                self.last_yolo_detections = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
+                results['phone_detections'] = self.last_yolo_detections
                 self.last_phone_time = current_time
 
             # 2. Face & Pose (20 Hz)
@@ -88,14 +93,18 @@ class AnalysisThread(QThread):
                     results['focus'] = self.focus_anal.analyze(
                         face_data, 
                         pose_data, 
-                        results.get('phone_detections', []), 
+                        self.last_yolo_detections, 
                         fatigue_results.get('score', 0)
                     )
                     results['face_present'] = True
+                    
+                    # Update looking_down state for NEXT YOLO iteration
+                    self.is_looking_down = results['focus'].get('is_looking_down', False)
                 else:
                     results['face_present'] = False
                     # Still run focus analysis with objects even if face is missing
-                    results['focus'] = self.focus_anal.analyze(None, None, results.get('phone_detections', []), 0)
+                    results['focus'] = self.focus_anal.analyze(None, None, self.last_yolo_detections, 0)
+                    self.is_looking_down = False
                 
                 # Scientific Coaching (Every 5 seconds)
                 if current_time - self.last_coach_time >= 5.0:

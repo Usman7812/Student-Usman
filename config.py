@@ -12,7 +12,7 @@ FRAME_HEIGHT = 480
 
 # --- Analysis Intervals (seconds) ---
 FACE_POSE_INTERVAL = 0.05   # 20 Hz for rapid response
-PHONE_DETECTION_INTERVAL = 0.5 # 2 Hz for quick distraction detection
+PHONE_DETECTION_INTERVAL = 0.35 # 2.8 Hz for quick distraction detection
 EMOTION_SAMPLE_INTERVAL = 2.0  # 0.5 Hz
 COACHING_INTERVAL = 300    # 5 minutes
 
@@ -56,9 +56,9 @@ ALARM_FREQUENCY = 1000 # Hz for beep
 ALARM_DURATION = 500   # ms
 
 # --- Distraction & Object Settings ---
-PHONE_CONF_THRESHOLD = 0.45 
+PHONE_CONF_THRESHOLD = 0.40 
 PHONE_CLASS_ID = 67 # YOLOv8/v11 COCO class for cell phone
-YOLO_SUSPICIOUS_INTERVAL = 0.2
+YOLO_SUSPICIOUS_INTERVAL = 0.15
 USE_GPU = True    # Enable CUDA if available
 USE_OPENVINO = True # Fallback for fast CPU inference
 
