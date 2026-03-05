@@ -274,6 +274,12 @@ class MainWindow(QMainWindow):
                 # Play a softer, instructional chime for coach alerts
                 self.play_alarm(frequency=600, duration=300)
 
+        # 6. Detailed Object Explanation
+        if 'focus' in results and 'objects_summary' in results['focus']:
+            obj_summary = results['focus']['objects_summary']
+            if "No objects detected" not in obj_summary:
+                self.add_alert(f"🔍 {obj_summary}", debounce=10)
+
     def play_alarm(self, frequency=None, duration=None):
         if SOUND_ALERTS_ENABLED:
             current_time = time.time()

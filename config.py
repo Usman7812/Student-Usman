@@ -55,10 +55,17 @@ VOICE_COACHING_ENABLED = True
 ALARM_FREQUENCY = 1000 # Hz for beep
 ALARM_DURATION = 500   # ms
 
-# --- Distraction Settings ---
-PHONE_CONF_THRESHOLD = 0.45 # Higher for reduced false positives
-PHONE_CLASS_ID = 67 # YOLOv8 COCO class for cell phone
-YOLO_SUSPICIOUS_INTERVAL = 0.2 # Scan faster when user is looking down
+# --- Distraction & Object Settings ---
+PHONE_CONF_THRESHOLD = 0.45 
+PHONE_CLASS_ID = 67 # YOLOv8/v11 COCO class for cell phone
+YOLO_SUSPICIOUS_INTERVAL = 0.2
+USE_GPU = True    # Enable CUDA if available
+USE_OPENVINO = True # Fallback for fast CPU inference
+
+# Detailed Object Categories for Analysis
+STUDY_TOOLS = [73, 63, 66] # book, laptop, keyboard
+DISTRACTIONS = [PHONE_CLASS_ID]
+ENVIRONMENT = [0, 39, 56]   # person, bottle, chair
 
 # --- Emotion Settings ---
 EMOTION_WINDOW = 120 # seconds
@@ -67,7 +74,8 @@ EMOTION_EMA_ALPHA = 0.3 # Smoothing factor (lower = more stable, higher = more r
 
 # --- API Settings ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-CLAUDE_MODEL = "claude-3-haiku-20240307" # Haiku for speed and cost, as specified in prompt
+CLAUDE_MODEL = "claude-3-haiku-20240307"
+YOLO_MODEL_PATH = "yolo11n.pt" # Upgraded to v11
 
 # --- Database Settings ---
 DB_PATH = "sqlite:///studysense.db"

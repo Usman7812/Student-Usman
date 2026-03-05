@@ -64,14 +64,13 @@ class AnalysisThread(QThread):
             results = {}
             frame_to_process = self.current_frame
             
-            # 1. Objects (YOLO) - Move up so focus can use it
-            is_looking_down = results.get('focus', {}).get('status') == "Passive Drift" # Approximate for interval
+            # 1. Objects (YOLO) - Variable Interval Detection
+            # Determine interval: If looking down, scan MUCH faster to confirm distraction
+            is_looking_down = results.get('focus', {}).get('is_looking_down', False)
             current_phone_interval = YOLO_SUSPICIOUS_INTERVAL if is_looking_down else PHONE_DETECTION_INTERVAL
             
-            detections = []
             if current_time - self.last_phone_time >= current_phone_interval:
-                detections = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
-                results['phone_detections'] = detections
+                results['phone_detections'] = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
                 self.last_phone_time = current_time
 
             # 2. Face & Pose (20 Hz)
@@ -95,7 +94,8 @@ class AnalysisThread(QThread):
                     results['face_present'] = True
                 else:
                     results['face_present'] = False
-                    results['focus'] = self.focus_anal.analyze(None, None, [], 0)
+                    # Still run focus analysis with objects even if face is missing
+                    results['focus'] = self.focus_anal.analyze(None, None, results.get('phone_detections', []), 0)
                 
                 # Scientific Coaching (Every 5 seconds)
                 if current_time - self.last_coach_time >= 5.0:
@@ -106,16 +106,6 @@ class AnalysisThread(QThread):
                     results['pose_data'] = pose_data
                 
                 self.last_face_time = current_time
-
-            # 2. Variable Phone Detection (YOLO)
-            # Determine interval: If looking down, scan MUCH faster to confirm distraction
-            is_looking_down = results.get('focus', {}).get('is_looking_down', False)
-            current_phone_interval = YOLO_SUSPICIOUS_INTERVAL if is_looking_down else PHONE_DETECTION_INTERVAL
-            
-            if current_time - self.last_phone_time >= current_phone_interval:
-                # Always send this key if the interval hits, so UI can clear state
-                results['phone_detections'] = self.yolo_proc.detect(frame_to_process, conf=PHONE_CONF_THRESHOLD)
-                self.last_phone_time = current_time
 
             # 3. Emotion Detection (Neural Vector Matching)
             if current_time - self.last_emotion_time >= EMOTION_SAMPLE_INTERVAL:

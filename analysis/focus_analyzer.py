@@ -4,7 +4,7 @@ from config import (
     YAW_THRESHOLD, PITCH_THRESHOLD, LOOKING_DOWN_THRESHOLD,
     WINDOW_DIGITAL_FOCUS, WINDOW_ANALOG_STUDY, WINDOW_COGNITIVE_PAUSE,
     WINDOW_PASSIVE_DRIFT, WINDOW_MOBILE_USAGE, WINDOW_DAYDREAMING,
-    SACCADE_RATIO_THRESHOLD, PHONE_CLASS_ID
+    SACCADE_RATIO_THRESHOLD, PHONE_CLASS_ID, STUDY_TOOLS, DISTRACTIONS, ENVIRONMENT
 )
 
 class FocusAnalyzer:
@@ -40,8 +40,11 @@ class FocusAnalyzer:
         expression_spike = signatures.get('expression_spike', False)
         
         # Material Context
-        has_phone = any(d['class'] == PHONE_CLASS_ID for d in detections)
+        has_phone = any(d['class'] in DISTRACTIONS for d in detections)
         has_book = any(d['class'] == 73 for d in detections)
+        has_laptop = any(d['class'] == 63 for d in detections)
+        
+        self.last_detections = detections # Store for reporting
         
         # 1. IMMEDIATE ALARM: Mobile Usage (Direct or Inferred)
         if has_phone or (pitch > 30 and expression_spike):
@@ -98,8 +101,25 @@ class FocusAnalyzer:
             'status': self.state,
             'is_focused': self.state in ["Active Study", "Analog Study", "Cognitive Pause"],
             'alert_level': self._get_alert_level(),
-            'focus_score': 100 if self.state in ["Active Study", "Analog Study"] else 50
+            'focus_score': 100 if self.state in ["Active Study", "Analog Study"] else 50,
+            'objects_summary': self._generate_objects_summary()
         }
+
+    def _generate_objects_summary(self):
+        if not hasattr(self, 'last_detections') or not self.last_detections:
+            return "No objects detected."
+            
+        summary = []
+        for d in self.last_detections:
+            label = d.get('label', f"ID:{d['class']}")
+            if d['class'] in DISTRACTIONS:
+                summary.append(f"⚠️ Distraction: {label} (Put away!)")
+            elif d['class'] in STUDY_TOOLS:
+                summary.append(f"📘 Tool: {label} (Active Study)")
+            elif d['class'] in ENVIRONMENT:
+                summary.append(f"🏠 Context: {label}")
+        
+        return " | ".join(summary)
 
     def _get_alert_level(self):
         levels = {
